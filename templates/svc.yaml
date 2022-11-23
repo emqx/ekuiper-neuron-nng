@@ -1,0 +1,62 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "ekuiper-neuron-nng.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "ekuiper-neuron-nng.labels" . | nindent 4 }}
+  {{- if eq .Values.service.type "LoadBalancer" }}
+  {{- with .Values.service.annotations }}
+  annotations:
+  {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- end }}
+spec:
+  type: {{ .Values.service.type }}
+  {{- if eq .Values.service.type "LoadBalancer" }}
+  {{- if .Values.service.loadBalancerIP }}
+  loadBalancerIP: {{ .Values.service.loadBalancerIP }}
+  {{- end }}
+  {{- if .Values.service.loadBalancerSourceRanges }}
+  loadBalancerSourceRanges: {{- toYaml .Values.service.loadBalancerSourceRanges | nindent 4 }}
+  {{- end }}
+  {{- end }}
+  ports:
+  - name: {{ .Values.service.ports.ekuiper.api.name }}
+    port:  {{ .Values.service.ports.ekuiper.api.port | default 9081 }}
+    protocol: TCP
+    targetPort:  ekuiper-api
+    {{- if and (or (eq .Values.service.type "NodePort") (eq .Values.service.type "LoadBalancer")) (not (empty .Values.service.nodePorts.ekuiper.api)) }}
+    nodePort: {{ .Values.service.nodePorts.ekuiper.api }}
+    {{- else if eq .Values.service.type "ClusterIP" }}
+    nodePort: null
+    {{- end }}
+  - name: {{ .Values.service.ports.ekuiper.push.name }}
+    port:  {{ .Values.service.ports.ekuiper.push.port | default 10081 }}
+    protocol: TCP
+    targetPort:  ekuiper-push
+    {{- if and (or (eq .Values.service.type "NodePort") (eq .Values.service.type "LoadBalancer")) (not (empty .Values.service.nodePorts.ekuiper.push)) }}
+    nodePort: {{ .Values.service.nodePorts.ekuiper.push }}
+    {{- else if eq .Values.service.type "ClusterIP" }}
+    nodePort: null
+    {{- end }}
+  - name: {{ .Values.service.ports.neuron.web.name }}
+    port:  {{ .Values.service.ports.neuron.web.port | default 7000 }}
+    protocol: TCP
+    targetPort:  neuron-web
+    {{- if and (or (eq .Values.service.type "NodePort") (eq .Values.service.type "LoadBalancer")) (not (empty .Values.service.nodePorts.neuron.web)) }}
+    nodePort: {{ .Values.service.nodePorts.neuron.web }}
+    {{- else if eq .Values.service.type "ClusterIP" }}
+    nodePort: null
+    {{- end }}
+  - name: {{ .Values.service.ports.neuron.api.name }}
+    port: {{ .Values.service.ports.neuron.api.port | default 7001 }}
+    protocol: TCP
+    targetPort: neuron-api
+    {{- if and (or (eq .Values.service.type "NodePort") (eq .Values.service.type "LoadBalancer")) (not (empty .Values.service.nodePorts.neuron.api)) }}
+    nodePort: {{ .Values.service.nodePorts.neuron.api }}
+    {{- else if eq .Values.service.type "ClusterIP" }}
+    nodePort: null
+    {{- end }}
+  selector:
+    {{- include "ekuiper-neuron-nng.selectorLabels" . | nindent 4 }}

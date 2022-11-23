@@ -1,0 +1,115 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "ekuiper-neuron-nng.fullname" . }}
+  labels:
+    {{- include "ekuiper-neuron-nng.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "ekuiper-neuron-nng.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "ekuiper-neuron-nng.selectorLabels" . | nindent 8 }}
+    spec:
+      volumes:
+        {{- range $mount := .Values.ekuiperMounts }}
+        - name: {{ $mount.name }}
+          {{- if $.Values.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ printf "%s-%s" $.Release.Name (tpl $mount.name $) }}
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+        {{- end }}
+
+        {{- range $mount := .Values.neuronMounts }}
+        - name: {{ $mount.name }}
+          {{- if $.Values.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ printf "%s-%s" $.Release.Name (tpl $mount.name $) }}
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+        {{- end }}
+
+        - name: shared-tmp
+          emptyDir: {}
+
+      containers:
+        - name: ekuiper
+          image: "{{ .Values.images.ekuiper.repository }}:{{ .Values.images.ekuiper.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.images.pullPolicy }}
+          {{- if .Values.ekuiperEnv.enabled }}
+          env:
+          - name: {{ .Values.ekuiperEnv.keys.mqttDefaultServer }}
+            value: "{{ .Values.ekuiperEnv.values.mqttDefaultServer }}"
+          - name: {{ .Values.ekuiperEnv.keys.prometheusEnabled }}
+            value: "{{ .Values.ekuiperEnv.values.prometheusEnabled }}"
+          - name: {{ .Values.ekuiperEnv.keys.premetheusPort }}
+            value: "{{ .Values.ekuiperEnv.values.premetheusPort }}"
+          - name: {{ .Values.ekuiperEnv.keys.fileLog }}
+            value: "{{ .Values.ekuiperEnv.values.fileLog }}"
+          {{- end }}
+          ports:
+            - name: ekuiper-api
+              containerPort: {{ .Values.service.ports.ekuiper.api.port | default 9081 }}
+              protocol: TCP
+            - name: ekuiper-push
+              containerPort: {{ .Values.service.ports.ekuiper.push.port | default 10081 }}
+              protocol: TCP
+          readinessProbe:
+            httpGet:
+              port: {{ .Values.service.ports.ekuiper.api.port | default 9081 }}
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            {{- range $mount := .Values.ekuiperMounts }}
+            - name: {{ $mount.name }}
+              mountPath: {{ $mount.mountPath }}
+            {{- end }}
+            - name: shared-tmp
+              mountPath: "/tmp"
+        - name: neuron
+          image: "{{ .Values.images.neuron.repository }}:{{ .Values.images.neuron.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.images.pullPolicy }}
+          {{- if .Values.neuronEnv.enabled }}
+          env:
+          - name: {{ .Values.neuronEnv.key.disableAuth }}
+            value: "{{ .Values.neuronEnv.value.disableAuth }}"
+          {{- end }}
+          readinessProbe:
+            httpGet:
+              port: {{ .Values.service.ports.neuron.web.port | default 7000 }}
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          ports:
+            - name: neuron-web
+              containerPort: {{ .Values.service.ports.neuron.web.port | default 7000 }}
+              protocol: TCP
+            - name: neuron-api
+              containerPort: {{ .Values.service.ports.neuron.api.port | default 7001 }}
+              protocol: TCP
+          volumeMounts:
+            {{- range $mount := .Values.neuronMounts }}
+            - name: {{ $mount.name }}
+              mountPath: {{ $mount.mountPath }}
+            {{- end }}
+            - name: shared-tmp
+              mountPath: "/tmp"
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

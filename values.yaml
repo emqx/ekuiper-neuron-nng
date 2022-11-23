@@ -1,0 +1,170 @@
+# Default values for ekuiper-neuron-nng.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+replicaCount: 1
+
+images:
+  pullPolicy: IfNotPresent
+
+  ekuiper:
+    repository: lfedge/ekuiper
+    # Overrides the image tag whose default is the chart appVersion.
+    tag: "1.7.1-slim-python"
+  neuron:
+    repository: emqx/neuron
+    pullPolicy: IfNotPresent
+    # Overrides the image tag whose default is the chart appVersion.
+    tag: "2.2.8"
+
+service:
+  # -- service type
+  type: ClusterIP
+
+  # -- Service ports
+  ports:
+    ekuiper:
+      api:
+        # -- eKuiper api port name
+        name: "ekuiper-api"
+        # -- eKuiper api port
+        port: 9081
+      push:
+        # -- eKuiper push port name
+        name: "ekuiper-push"
+        # -- eKuiper push port
+        port: 10081
+    neuron:
+      web:
+        # -- Neuron Dashboard port name
+        name: "neuron-web"
+        # -- Neuron Dashboard port
+        port: 7000
+      api:
+        # -- Neuron API port name
+        name: "neuron-api"
+        # -- Neuron API port
+        port: 7001
+
+
+  # -- Specify the nodePort(s) value for the LoadBalancer and NodePort service types.
+  # ref: https://kubernetes.io/docs/concepts/services-networking/service/#type-nodeport
+  nodePorts:
+    ekuiper:
+      api:
+      push:
+    neuron:
+      web:
+      api:
+  ## Set the LoadBalancer service type to internal only.
+  ## ref: https://kubernetes.io/docs/concepts/services-networking/service/#internal-load-balancer
+  ##
+  # loadBalancerIP:
+  ## Load Balancer sources
+  ## ref: https://kubernetes.io/docs/tasks/access-application-cluster/configure-cloud-provider-firewall/#restrict-access-for-loadbalancer-service
+  ## Example:
+  ## loadBalancerSourceRanges:
+  ## - 10.10.10.0/24
+  ##
+  # @ignored
+  loadBalancerSourceRanges: []
+  ## TODO: it's just for OpenELB
+  # -- Provide any additional annotations which may be required. Evaluated as a template
+  annotations:
+    lb.kubesphere.io/v1alpha1: openelb
+    eip.openelb.kubesphere.io/v1alpha2: eip-pool
+    protocol.openelb.kubesphere.io/v1alpha1: layer2
+
+# podSecurityContext:
+  # fsGroup: 2000
+
+securityContext:
+  # capabilities:
+  #   drop:
+  #   - ALL
+  # readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  runAsUser: 1000
+
+# persistence:
+#   enabled: true
+#   accessMode: ReadWriteOnce
+#   # -- Existing PersistentVolumeClaims
+#   # The value is evaluated as a template
+#   # So, for example, the name can depend on .Release or .Chart
+#   ekuiper:
+#     existingClaim: "pvc-ekuiper-data"
+#   neuron:
+#     existingClaim: "pvc-neuron-data"
+
+
+persistence:
+  enabled: false
+  accessMode: ReadWriteOnce
+  ## TODO: not all storage class can work well, it depends on the specific storage
+  storageClass: huawei-nfs
+
+ekuiperMounts:
+  - name: pvc-ekuiper-data
+    capacity: 100Mi
+    mountPath: "/kuiper/data"
+  - name: pvc-ekuiper-plugins-portable
+    capacity: 100Mi
+    mountPath: "/kuiper/plugins/portable"
+
+neuronMounts:
+  - name: pvc-neuron-data
+    capacity: 100Mi
+    mountPath: "/opt/neuron/persistence"
+
+
+resources: {}
+  # We usually recommend not to specify default resources and to leave this as a conscious
+  # choice for the user. This also increases chances charts run on environments with little
+  # resources, such as Minikube. If you do want to specify resources, uncomment the following
+  # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
+  # limits:
+  #   cpu: 100m
+  #   memory: 128Mi
+  # requests:
+  #   cpu: 100m
+  #   memory: 128Mi
+
+nodeSelector: {}
+
+tolerations:
+  - key: "node.kubernetes.io/not-ready"
+    operator: "Exists"
+    effect: "NoExecute"
+    tolerationSeconds: 30
+  - key: "node.kubernetes.io/unreachable"
+    operator: "Exists"
+    effect: "NoExecute"
+    tolerationSeconds: 30
+
+affinity: {}
+
+ekuiperEnv:
+  enabled: true
+  keys:
+    mqttDefaultServer: MQTT_SOURCE__DEFAULT__SERVER
+    prometheusEnabled: KUIPER__BASIC__PROMETHEU
+    premetheusPort: KUIPER__BASIC__PROMETHEUSPORT
+    fileLog: KUIPER__BASIC__FILELOG
+
+  values:
+    mqttDefaultServer: tcp://broker.emqx.io:1883
+    prometheusEnabled: true
+    premetheusPort: 9081
+    fileLog: false
+
+neuronEnv:
+  enabled: true
+  key:
+    disableAuth: DISABLE_AUTH
+
+  value:
+    disableAuth: true
+
+
+
